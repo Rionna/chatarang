@@ -1,86 +1,81 @@
 import React, { Component } from 'react'
-import { Route, Switch, Redirect } from 'react-router-dom'
 
-import './App.css'
-import { auth } from './base'
-import SignIn from './SignIn'
-import Main from './Main'
+import ChatHeader from './ChatHeader'
+import MessageList from './MessageList'
+import MessageForm from './MessageForm'
 
-class App extends Component {
-  state = {
-    user: {},
+import base from './base'
+
+class Chat extends Component {
+  constructor() {
+    super()
+
+    this.state = {
+      messages: [],
+      rebaseBinding: null,
+    }
   }
 
   componentWillMount() {
-    const user = JSON.parse(localStorage.getItem('user'))
+    this.syncMessages()
+  }
 
-    if (user) {
-      this.setState({ user })
+  componentDidUpdate(prevProps) {
+    if (prevProps.room.name !== this.props.room.name) {
+      this.syncMessages()
+    }
+  }
+
+  syncMessages = () => {
+    if (this.state.rebaseBinding) {
+      base.removeBinding(this.state.rebaseBinding)
     }
 
-    auth.onAuthStateChanged(
-      user => {
-        if (user) {
-          this.handleAuth(user)
-        } else {
-          this.handleUnauth()
-        }
+    const rebaseBinding = base.syncState(
+      `${this.props.room.name}/messages`,
+      {
+        context: this,
+        state: 'messages',
+        asArray: true,
       }
     )
+
+    this.setState({ rebaseBinding })
   }
 
-  handleAuth = (oauthUser) => {
-    const user = {
-      email: oauthUser.email,
-      uid: oauthUser.uid,
-      displayName: oauthUser.displayName,
-      photoUrl: oauthUser.photoUrl,
-    }
-    this.setState({ user })
-    localStorage.setItem('user', JSON.stringify(user))
-  }
+  addMessage = (body) => {
+    const messages = [...this.state.messages]
+    messages.push({
+      id: `${this.props.user.uid}-${Date.now()}`,
+      user: this.props.user,
+      body,
+      createdAt: Date.now(),
+    })
 
-  signedIn = () => {
-    return this.state.user.uid
-  }
-
-  signOut = () => {
-    auth.signOut()
-  }
-
-  handleUnauth = () => {
-    this.setState({ user: {} })
-    localStorage.removeItem('user')
+    this.setState({ messages })
   }
 
   render() {
     return (
-      <div className="App">
-        <Switch>
-          <Route
-            path="/sign-in"
-            render={navProps => (
-              this.signedIn()
-                ? <Redirect to="/rooms/general" />
-                : <SignIn />
-            )}
-          />
-          <Route
-            path="/rooms/:roomName"
-            render={navProps => (
-              this.signedIn()
-              ? <Main
-                  user={this.state.user}
-                  signOut={this.signOut}
-                  {...navProps}
-                />
-              : <Redirect to="/sign-in" />
-            )}
-          />
-        </Switch>
+      <div className="Chat" style={styles}>
+        <ChatHeader
+          room={this.props.room}
+          removeRoom={this.props.removeRoom}
+        />
+        <MessageList
+          messages={this.state.messages}
+          room={this.props.room}
+        />
+        <MessageForm addMessage={this.addMessage} />
       </div>
     )
   }
 }
 
-export default App
+const styles = {
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+}
+
+export default Chat
