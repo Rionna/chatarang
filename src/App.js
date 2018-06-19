@@ -1,81 +1,114 @@
 import React, { Component } from 'react'
+import { Route, Switch, Redirect } from 'react-router-dom'
 
-import ChatHeader from './ChatHeader'
-import MessageList from './MessageList'
-import MessageForm from './MessageForm'
+import './App.css'
+import base, { auth } from './base'
+import SignIn from './SignIn'
+import Main from './Main'
 
-import base from './base'
-
-class Chat extends Component {
-  constructor() {
-    super()
-
-    this.state = {
-      messages: [],
-      rebaseBinding: null,
-    }
+class App extends Component {
+  state = {
+    user: {},
+    users: {},
   }
 
   componentWillMount() {
-    this.syncMessages()
-  }
+    const user = JSON.parse(localStorage.getItem('user'))
 
-  componentDidUpdate(prevProps) {
-    if (prevProps.room.name !== this.props.room.name) {
-      this.syncMessages()
-    }
-  }
-
-  syncMessages = () => {
-    if (this.state.rebaseBinding) {
-      base.removeBinding(this.state.rebaseBinding)
+    if (user) {
+      this.setState({ user })
     }
 
-    const rebaseBinding = base.syncState(
-      `${this.props.room.name}/messages`,
+    base.syncState(
+      'users',
       {
         context: this,
-        state: 'messages',
-        asArray: true,
+        state: 'users',
       }
     )
 
-    this.setState({ rebaseBinding })
+    auth.onAuthStateChanged(
+      user => {
+        if (user) {
+          this.handleAuth(user)
+        } else {
+          this.handleUnauth()
+        }
+      }
+    )
   }
 
-  addMessage = (body) => {
-    const messages = [...this.state.messages]
-    messages.push({
-      id: `${this.props.user.uid}-${Date.now()}`,
-      user: this.props.user,
-      body,
-      createdAt: Date.now(),
-    })
+  handleAuth = (oauthUser) => {
+    // Build the user object
+    const user = {
+      email: oauthUser.email,
+      uid: oauthUser.uid,
+      displayName: oauthUser.displayName,
+      photoUrl: oauthUser.photoURL,
+    }
 
-    this.setState({ messages })
+    // Add/update the user in the list
+    const users = {...this.state.users}
+    users[user.uid] = user
+
+    // Update state and localStorage
+    this.setState({ user, users })
+    localStorage.setItem('user', JSON.stringify(user))
+  }
+
+  signedIn = () => {
+    return this.state.user.uid
+  }
+
+  signOut = () => {
+    auth.signOut()
+  }
+
+  handleUnauth = () => {
+    this.setState({ user: {} })
+    localStorage.removeItem('user')
   }
 
   render() {
+    const mainProps = {
+      user: this.state.user,
+      signOut: this.signOut,
+      users: this.state.users,
+    }
+
     return (
-      <div className="Chat" style={styles}>
-        <ChatHeader
-          room={this.props.room}
-          removeRoom={this.props.removeRoom}
-        />
-        <MessageList
-          messages={this.state.messages}
-          room={this.props.room}
-        />
-        <MessageForm addMessage={this.addMessage} />
+      <div className="App">
+        <Switch>
+          <Route
+            path="/sign-in"
+            render={navProps => (
+              this.signedIn()
+                ? <Redirect to="/rooms/general" />
+                : <SignIn />
+            )}
+          />
+          <Route
+            path="/rooms/:roomName"
+            render={navProps => (
+              this.signedIn()
+              ? <Main
+                  {...mainProps}
+                  {...navProps}
+                />
+              : <Redirect to="/sign-in" />
+            )}
+          />
+          <Route
+            render={() => (
+              this.signedIn()
+                ? <Redirect to="/rooms/general" />
+                : <Redirect to="/sign-in" />
+            )}
+          />
+        </Switch>
       </div>
     )
   }
 }
 
-const styles = {
-  flex: 1,
-  display: 'flex',
-  flexDirection: 'column',
-}
-
-export default Chat
+export default App
