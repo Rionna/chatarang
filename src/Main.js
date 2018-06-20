@@ -59,7 +59,7 @@ class Main extends Component {
     if (roomName === 'new') return null
 
     const room = this.filteredRooms()
-                    .find(room => room.name === roomName)
+                     .find(room => room.name === roomName)
 
     if (room) {
       this.setState({ room })
@@ -80,6 +80,15 @@ class Main extends Component {
 
   addRoom = (room) => {
     const rooms = {...this.state.rooms}
+    const { user } = this.props
+
+    if (!room.public) {
+      room.members.push({
+        label: `${user.displayName} (${user.email})`,
+        value: user.uid,
+      })
+    }
+
     rooms[room.name] = room
     this.setState({ rooms })
   }
